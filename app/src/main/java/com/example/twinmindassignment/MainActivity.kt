@@ -1,6 +1,13 @@
 package com.example.twinmindassignment
 
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
@@ -16,6 +23,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -27,6 +35,18 @@ import kotlinx.coroutines.delay
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                100
+            )
+        }
+
         setContent {
             TwinMindUI()
         }
@@ -123,6 +143,19 @@ fun RecordingUI(navController: NavHostController) {
                 onClick = {
                     isRecording = !isRecording
                     status = if (isRecording) "Recording..." else "Stopped"
+
+                    val intent = Intent(
+                        navController.context,
+                        RecordingService::class.java
+                    )
+
+                    intent.action = if (isRecording)
+                        RecordingService.ACTION_START
+                    else
+                        RecordingService.ACTION_STOP
+
+                    navController.context.startService(intent)
+
                 },
                 modifier = Modifier.size(120.dp),
                 shape = CircleShape
@@ -147,11 +180,19 @@ fun RecordingUI(navController: NavHostController) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SummaryUI() {
-    var loading by remember { mutableStateOf(true) }
 
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("transcripts", Context.MODE_PRIVATE)
+
+    var transcript by remember {
+        mutableStateOf(
+            prefs.getString("latest_transcript", null)
+        )
+    }
+
+    // Re-check transcript every time screen opens
     LaunchedEffect(Unit) {
-        delay(3000)
-        loading = false
+        transcript = prefs.getString("latest_transcript", null)
     }
 
     Scaffold(
@@ -164,27 +205,29 @@ fun SummaryUI() {
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            if (loading) {
+
+            if (transcript == null) {
                 Text("Generating summary...")
             } else {
-                Text("Title", fontWeight = FontWeight.Bold)
-                Text("Team Meeting")
 
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("Summary", fontWeight = FontWeight.Bold)
-                Text("Discussion about tasks, blockers and deadlines.")
+                Text("Transcript", fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(transcript!!)
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Text("Action Items", fontWeight = FontWeight.Bold)
-                Text("• Complete UI\n• Test recording")
+                Text("• Review transcript\n• Generate summary")
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Text("Key Points", fontWeight = FontWeight.Bold)
-                Text("• Deadline soon\n• Pending review")
+                Text("• Transcription completed\n• Ready for summary generation")
             }
         }
     }
 }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Preview(showBackground = true)
 @Composable
